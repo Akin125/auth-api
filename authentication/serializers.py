@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -82,3 +84,43 @@ class LoginSerializer(serializers.Serializer):
             'access_expires': refresh.access_token.payload['exp'],
             'refresh_expires': refresh.payload['exp'],
         }
+
+class VerifyEmailSerializer(serializers.Serializer):
+    """Serializer for email verification token validation"""
+    token = serializers.CharField(required=True)
+
+class RequestPasswordResetSerializer(serializers.Serializer):
+    """Serializer for requesting a password reset"""
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        """Validate that a user exists with the given email"""
+        if not User.objects.filter(email=value).exists():
+            # For security reasons, we don't tell the user that the email doesn't exist
+            # We'll just send a generic message in the view
+            pass
+        return value
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """Serializer for resetting password with token"""
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, data):
+        """
+        Validate that passwords match and meet requirements
+        """
+        password = data.get('password')
+        confirm_password = data.get('confirm_password')
+
+        if password != confirm_password:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+
+        try:
+            validate_password(password)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({"password": list(e.messages)})
+
+        return data
+
