@@ -1,9 +1,13 @@
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import RegisterSerializer, LoginSerializer, UserSerializer
+from .serializers import (
+    RegisterSerializer, LoginSerializer, UserSerializer,
+    VerifyEmailSerializer, RequestPasswordResetSerializer, ResetPasswordSerializer
+)
 from django.contrib.auth.models import User
-from .models import APIKey
+from .models import APIKey, EmailVerificationToken, PasswordResetToken
+from .utils import send_verification_email, send_password_reset_email
 import uuid
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -30,6 +34,9 @@ class RegisterView(APIView):
         - Must be at least 8 characters long
 
         All fields (username, email, password) are required.
+
+        After successful registration, a verification email will be sent to the provided
+        email address. The user must verify their email before they can log in.
         """,
         request_body=RegisterSerializer,
         responses={
@@ -55,7 +62,16 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+            # Send verification email
+            send_verification_email(user)
+            # Mark user as inactive until email is verified
+            user.is_active = False
+            user.save()
+
+            return Response({
+                "message": "User registered successfully. Please check your email to verify your account.",
+                "user": UserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
@@ -116,6 +132,19 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
+            # Additional check for email verification
+            email = request.data.get('email', '')
+            try:
+                user = User.objects.get(email=email)
+                if not user.is_active:
+                    return Response(
+                        {"error": "Email not verified. Please check your inbox for the verification link."},
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+            except User.DoesNotExist:
+                # Let the serializer handle this case
+                pass
+
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -159,3 +188,197 @@ class ProfileView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+class VerifyEmailView(APIView):
+    permission_classes = [HasAPIKey]
+
+    @swagger_auto_schema(
+        operation_summary="Verify user email",
+        operation_description="""
+        Verifies a user's email address using the token sent to their email.
+
+        This endpoint requires a valid API key for access. The API key should be
+        included in the request headers as 'X-API-Key'.
+        """,
+        request_body=VerifyEmailSerializer,
+        responses={
+            200: openapi.Response(
+                description="Email successfully verified",
+                examples={
+                    "application/json": {
+                        "message": "Email verified successfully. You can now log in."
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="Invalid or expired token",
+                examples={
+                    "application/json": {
+                        "error": "Invalid or expired token."
+                    }
+                }
+            ),
+            401: "API key missing or invalid",
+            404: "Token not found"
+        },
+        tags=['Authentication']
+    )
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        if serializer.is_valid():
+            token_value = serializer.validated_data['token']
+
+            try:
+                token = EmailVerificationToken.objects.get(token=token_value)
+
+                if not token.is_valid():
+                    return Response(
+                        {"error": "Invalid or expired token."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Verify the user
+                user = token.user
+                user.is_active = True
+                user.save()
+
+                # Mark token as used
+                token.verified = True
+                token.save()
+
+                return Response(
+                    {"message": "Email verified successfully. You can now log in."},
+                    status=status.HTTP_200_OK
+                )
+
+            except EmailVerificationToken.DoesNotExist:
+                return Response(
+                    {"error": "Token not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class RequestPasswordResetView(APIView):
+    permission_classes = [HasAPIKey]
+
+    @swagger_auto_schema(
+        operation_summary="Request password reset email",
+        operation_description="""
+        Sends a password reset email to the user.
+
+        This endpoint requires a valid API key for access. The API key should be
+        included in the request headers as 'X-API-Key'.
+
+        For security reasons, this endpoint always returns a success message,
+        even if the email does not exist in the system.
+        """,
+        request_body=RequestPasswordResetSerializer,
+        responses={
+            200: openapi.Response(
+                description="Password reset email sent (if email exists)",
+                examples={
+                    "application/json": {
+                        "message": "If your email is registered, you will receive a password reset link."
+                    }
+                }
+            ),
+            401: "API key missing or invalid"
+        },
+        tags=['Authentication']
+    )
+    def post(self, request):
+        serializer = RequestPasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+
+            # Try to find the user
+            try:
+                user = User.objects.get(email=email)
+                send_password_reset_email(user)
+            except User.DoesNotExist:
+                # For security, we don't reveal if the email exists or not
+                pass
+
+            # Always return success for security
+            return Response(
+                {"message": "If your email is registered, you will receive a password reset link."},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ResetPasswordView(APIView):
+    permission_classes = [HasAPIKey]
+
+    @swagger_auto_schema(
+        operation_summary="Reset user password",
+        operation_description="""
+        Resets the user's password using a valid reset token.
+
+        This endpoint requires a valid API key for access. The API key should be
+        included in the request headers as 'X-API-Key'.
+
+        Password requirements follow Django's default password validators.
+        """,
+        request_body=ResetPasswordSerializer,
+        responses={
+            200: openapi.Response(
+                description="Password reset successful",
+                examples={
+                    "application/json": {
+                        "message": "Password has been reset successfully."
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="Invalid data or expired token",
+                examples={
+                    "application/json": {
+                        "error": "Invalid or expired token.",
+                        "password": ["This password is too common."],
+                        "confirm_password": ["Passwords do not match."]
+                    }
+                }
+            ),
+            401: "API key missing or invalid",
+            404: "Token not found"
+        },
+        tags=['Authentication']
+    )
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            token_value = serializer.validated_data['token']
+            password = serializer.validated_data['password']
+
+            try:
+                token = PasswordResetToken.objects.get(token=token_value)
+
+                if not token.is_valid():
+                    return Response(
+                        {"error": "Invalid or expired token."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Reset password
+                user = token.user
+                user.set_password(password)
+                user.save()
+
+                # Mark token as used
+                token.used = True
+                token.save()
+
+                return Response(
+                    {"message": "Password has been reset successfully."},
+                    status=status.HTTP_200_OK
+                )
+
+            except PasswordResetToken.DoesNotExist:
+                return Response(
+                    {"error": "Token not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
