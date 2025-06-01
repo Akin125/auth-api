@@ -11,6 +11,8 @@ from .utils import send_verification_email, send_password_reset_email
 import uuid
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
 
 class HasAPIKey(permissions.BasePermission):
     """
@@ -382,3 +384,136 @@ class ResetPasswordView(APIView):
                 )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class VerifyEmailLinkView(APIView):
+    """
+    View to handle email verification when user clicks the link in the email.
+    This receives a GET request with the token in the URL.
+    """
+    permission_classes = []  # No permissions required as this is accessed via email link
+
+    @swagger_auto_schema(
+        operation_summary="Verify user email via link",
+        operation_description="""
+        Verifies a user's email address when they click the link sent to their email.
+        This endpoint expects a GET request with the token in the URL path.
+        """,
+        manual_parameters=[
+            openapi.Parameter(
+                'token',
+                openapi.IN_PATH,
+                description="Email verification token",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+        ],
+        responses={
+            200: "Email successfully verified",
+            302: "Redirect to frontend with success message",
+            400: "Invalid or expired token",
+            404: "Token not found"
+        },
+        tags=['Authentication']
+    )
+    def get(self, request, token):
+        try:
+            verification_token = EmailVerificationToken.objects.get(token=token)
+
+            if not verification_token.is_valid():
+                # Token expired or already used
+                return HttpResponse(
+                    "<h1>Invalid or expired verification link</h1>"
+                    "<p>The verification link has expired or has already been used.</p>"
+                    "<p>Please request a new verification email.</p>",
+                    status=400
+                )
+
+            # Verify the user
+            user = verification_token.user
+            user.is_active = True
+            user.save()
+
+            # Mark token as verified
+            verification_token.verified = True
+            verification_token.save()
+
+            # Return a simple HTML response
+            return HttpResponse(
+                "<h1>Email Verification Successful</h1>"
+                "<p>Your email has been verified successfully.</p>"
+                "<p>You can now log in to your account.</p>",
+                status=200
+            )
+
+        except EmailVerificationToken.DoesNotExist:
+            return HttpResponse(
+                "<h1>Invalid Verification Link</h1>"
+                "<p>The verification link is invalid.</p>"
+                "<p>Please request a new verification email.</p>",
+                status=404
+            )
+
+class ResetPasswordLinkView(APIView):
+    """
+    View to handle password reset when user clicks the link in the email.
+    This serves a simple HTML form or redirects to the frontend for password reset.
+    """
+    permission_classes = []  # No permissions required as this is accessed via email link
+
+    @swagger_auto_schema(
+        operation_summary="Handle password reset link",
+        operation_description="""
+        Handles the password reset link when the user clicks it in their email.
+        This endpoint expects a GET request with the token in the URL path and
+        either renders a simple password reset form or redirects to the frontend.
+        """,
+        manual_parameters=[
+            openapi.Parameter(
+                'token',
+                openapi.IN_PATH,
+                description="Password reset token",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+        ],
+        responses={
+            200: "Password reset form displayed",
+            302: "Redirect to frontend with token",
+            400: "Invalid or expired token",
+            404: "Token not found"
+        },
+        tags=['Authentication']
+    )
+    def get(self, request, token):
+        try:
+            reset_token = PasswordResetToken.objects.get(token=token)
+
+            if not reset_token.is_valid():
+                # Token expired or already used
+                return HttpResponse(
+                    "<h1>Invalid or expired reset link</h1>"
+                    "<p>The password reset link has expired or has already been used.</p>"
+                    "<p>Please request a new password reset.</p>",
+                    status=400
+                )
+
+            # Return a simple HTML page with a form for password reset
+            html = f"""
+            <html>
+                <head>
+                    <title>Reset Your Password</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 500px; margin: 0 auto; }}
+                        h1 {{ color: #333; }}
+                        .form-group {{ margin-bottom: 15px; }}
+                        label {{ display: block; margin-bottom: 5px; }}
+                        input[type="password"] {{ width: 100%; padding: 8px; box-sizing: border-box; }}
+                        button {{ background: #4CAF50; color: white; border: none; padding: 10px 15px; cursor: pointer; }}
+                        .error {{ color: red; margin-top: 5px; }}
+                    </style>
+                </head>
+                <body>
+                    <h1>Reset Your Password</h1>
+                    <p>Enter your new password below:</p>
+                    <form id="resetForm" method="POST">
+                        <div class="form-group
