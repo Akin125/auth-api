@@ -456,8 +456,8 @@ class ResetPasswordLinkView(APIView):
     """
     permission_classes = []  # No permissions required for email links
 
-   def get_reset_form_html(self, token, errors=None, success_html=""):
-       """Helper to generate password reset form HTML"""
+    def get_reset_form_html(self, token, errors=None):
+        """Helper to generate password reset form HTML"""
         errors_html = ""
         if errors:
             errors_html = "<div class='errors'>"
@@ -467,47 +467,39 @@ class ResetPasswordLinkView(APIView):
             errors_html += "</div>"
 
         return f"""
-        <html>
-            <head>
-                <title>Reset Password</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; }}
-                    h1 {{ color: #333; }}
-                    .form-group {{ margin-bottom: 15px; }}
-                    label {{ display: block; margin-bottom: 5px; }}
-                    input[type="password"] {{ width: 100%; padding: 8px; box-sizing: border-box; }}
-                    button {{ background: #4CAF50; color: white; border: none; padding: 10px 15px; cursor: pointer; }}
-                    .error {{ color: red; margin-top: 5px; }}
-                    .errors {{ background: #ffebee; padding: 15px; margin-bottom: 20px; border-radius: 4px; }}
-                    .success {{ background: #e8f5e9; color: #2e7d32; padding: 15px; margin-bottom: 20px; border-radius: 4px; }}
-                    .message {{ font-weight: bold; margin-bottom: 5px; }}
-                </style>
-            </head>
-             <body>
-                 <h1>Reset Your Password</h1>
-                 {success_html if 'success_html' in locals() else ''}
-                 {errors_html}
-                 <form method="POST">
-                     <input type="hidden" name="token" value="{token}">
-                     <div class="form-group">
-                         <label for="password">New Password</label>
-                         <input type="password" id="password" name="password" required>
-                     </div>
-                     <div class="form-group">
-                         <label for="confirm_password">Confirm Password</label>
-                         <input type="password" id="confirm_password" name="confirm_password" required>
-                     </div>
-                     <button type="submit" id="submitBtn">Reset Password</button>
-                     <script>
-                         document.querySelector('form').addEventListener('submit', function() {
-                             document.getElementById('submitBtn').textContent = 'Loading...';
-                             document.getElementById('submitBtn').disabled = true;
-                         });
-                     </script>
-                 </form>
-             </body>
-        </html>
-        """
+             <html>
+                    <head>
+                        <title>Reset Password</title>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; }}
+                            h1 {{ color: #333; }}
+                            .form-group {{ margin-bottom: 15px; }}
+                            label {{ display: block; margin-bottom: 5px; }}
+                            input[type="password"] {{ width: 100%; padding: 8px; box-sizing: border-box; }}
+                            button {{ background: #4CAF50; color: white; border: none; padding: 10px 15px; cursor: pointer; }}
+                            .error {{ color: red; margin-top: 5px; }}
+                            .errors {{ background: #ffebee; padding: 15px; margin-bottom: 20px; border-radius: 4px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Reset Your Password</h1>
+                        {errors_html}
+                        <form method="POST">
+                            <input type="hidden" name="token" value="{token}">
+                            <div class="form-group">
+                                <label for="password">New Password</label>
+                                <input type="password" id="password" name="password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="confirm_password">Confirm Password</label>
+                                <input type="password" id="confirm_password" name="confirm_password" required>
+                            </div>
+                            <button type="submit">Reset Password</button>
+                        </form>
+                    </body>
+             </html>
+            """
+
 
     def get(self, request, token):
         try:
