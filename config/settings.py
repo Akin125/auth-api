@@ -185,7 +185,7 @@ REST_FRAMEWORK = {
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
 
 # Email settings
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'philipoluseyi@gmail.com')
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
 
 # If EMAIL_HOST is set, use SMTP instead of console backend
