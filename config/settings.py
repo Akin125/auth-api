@@ -25,7 +25,18 @@ SECRET_KEY = 'django-insecure-t&z)0ysqbb6bq16slfpoc69=49$z#&-4bextjk2unss8dpexj&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# CORS Settings
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost',
+    'http://127.0.0.1',
+    'https://auth-api-lg46.onrender.com',
+]
+
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'auth-api-lg46.onrender.com',
+]
 
 
 # Application definition
@@ -41,6 +52,8 @@ INSTALLED_APPS = [
      # Third-party apps:
      'rest_framework',
      'rest_framework_simplejwt',
+     'drf_yasg',
+     'corsheaders',
 
      # Your app:
      'authentication',
@@ -49,6 +62,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # Add this before CommonMiddleware
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
