@@ -113,7 +113,7 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Auth API <noreply@yourdomain.com>')
 
 # Site URL for links in emails
-SITE_URL = 'http://localhost:3000'  # Change in production
+SITE_URL = os.environ.get('SITE_URL', 'http://localhost:3000')  # Default for development
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
