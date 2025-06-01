@@ -479,10 +479,13 @@ class ResetPasswordLinkView(APIView):
                     button {{ background: #4CAF50; color: white; border: none; padding: 10px 15px; cursor: pointer; }}
                     .error {{ color: red; margin-top: 5px; }}
                     .errors {{ background: #ffebee; padding: 15px; margin-bottom: 20px; border-radius: 4px; }}
+                    .success {{ background: #e8f5e9; color: #2e7d32; padding: 15px; margin-bottom: 20px; border-radius: 4px; }}
+                    .message {{ font-weight: bold; margin-bottom: 5px; }}
                 </style>
             </head>
             <body>
                 <h1>Reset Your Password</h1>
+                {success_html}
                 {errors_html}
                 <form method="POST">
                     <input type="hidden" name="token" value="{token}">
@@ -494,7 +497,13 @@ class ResetPasswordLinkView(APIView):
                         <label for="confirm_password">Confirm Password</label>
                         <input type="password" id="confirm_password" name="confirm_password" required>
                     </div>
-                    <button type="submit">Reset Password</button>
+                    <button type="submit" id="submitBtn">Reset Password</button>
+                    <script>
+                        document.querySelector('form').addEventListener('submit', function() {
+                            document.getElementById('submitBtn').textContent = 'Loading...';
+                            document.getElementById('submitBtn').disabled = true;
+                        });
+                    </script>
                 </form>
             </body>
         </html>
