@@ -1,1 +1,1 @@
-web: gunicorn auth_api.wsgi
+web: gunicorn config.wsgi
