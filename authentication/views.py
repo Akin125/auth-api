@@ -456,8 +456,8 @@ class ResetPasswordLinkView(APIView):
     """
     permission_classes = []  # No permissions required for email links
 
-    def get_reset_form_html(self, token, errors=None):
-        """Helper to generate password reset form HTML"""
+   def get_reset_form_html(self, token, errors=None, success_html=""):
+       """Helper to generate password reset form HTML"""
         errors_html = ""
         if errors:
             errors_html = "<div class='errors'>"
@@ -483,29 +483,29 @@ class ResetPasswordLinkView(APIView):
                     .message {{ font-weight: bold; margin-bottom: 5px; }}
                 </style>
             </head>
-            <body>
-                <h1>Reset Your Password</h1>
-                {success_html}
-                {errors_html}
-                <form method="POST">
-                    <input type="hidden" name="token" value="{token}">
-                    <div class="form-group">
-                        <label for="password">New Password</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="confirm_password">Confirm Password</label>
-                        <input type="password" id="confirm_password" name="confirm_password" required>
-                    </div>
-                    <button type="submit" id="submitBtn">Reset Password</button>
-                    <script>
-                        document.querySelector('form').addEventListener('submit', function() {
-                            document.getElementById('submitBtn').textContent = 'Loading...';
-                            document.getElementById('submitBtn').disabled = true;
-                        });
-                    </script>
-                </form>
-            </body>
+             <body>
+                 <h1>Reset Your Password</h1>
+                 {success_html if 'success_html' in locals() else ''}
+                 {errors_html}
+                 <form method="POST">
+                     <input type="hidden" name="token" value="{token}">
+                     <div class="form-group">
+                         <label for="password">New Password</label>
+                         <input type="password" id="password" name="password" required>
+                     </div>
+                     <div class="form-group">
+                         <label for="confirm_password">Confirm Password</label>
+                         <input type="password" id="confirm_password" name="confirm_password" required>
+                     </div>
+                     <button type="submit" id="submitBtn">Reset Password</button>
+                     <script>
+                         document.querySelector('form').addEventListener('submit', function() {
+                             document.getElementById('submitBtn').textContent = 'Loading...';
+                             document.getElementById('submitBtn').disabled = true;
+                         });
+                     </script>
+                 </form>
+             </body>
         </html>
         """
 
