@@ -6,7 +6,7 @@ from .serializers import (
     VerifyEmailSerializer, RequestPasswordResetSerializer, ResetPasswordSerializer
 )
 from django.contrib.auth.models import User
-from .models import APIKey, EmailVerificationToken, PasswordResetToken
+from .models import EmailVerificationToken, PasswordResetToken
 from .utils import send_verification_email, send_password_reset_email
 import uuid
 from drf_yasg.utils import swagger_auto_schema
@@ -14,37 +14,53 @@ from drf_yasg import openapi
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 
-class HasAPIKey(permissions.BasePermission):
-    """
-    Permission class to check if request has a valid API key
-    """
-    def has_permission(self, request, view):
-        return hasattr(request, 'auth') and isinstance(request.auth, APIKey)
-
 class RegisterView(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
         operation_summary="Register a new user",
         operation_description="""
         Creates a new user account in the system.
 
-        This endpoint requires a valid API key for access. The API key should be
-        included in the request headers as 'X-API-Key'.
-
-        Password requirements:
+        ### Password Requirements
         - Must be at least 8 characters long
-
-        All fields (username, email, password) are required.
-
+        - Should not be too common or easily guessable
+        
+        ### Required Fields
+        - username: A unique username for the account
+        - email: A valid email address (must be unique)
+        - password: User's secure password
+        
+        ### After Registration
         After successful registration, a verification email will be sent to the provided
         email address. The user must verify their email before they can log in.
+        
+        ### Example Request
+        ```json
+        {
+            "username": "johndoe",
+            "email": "john.doe@example.com",
+            "password": "securePassword123"
+        }
+        ```
         """,
         request_body=RegisterSerializer,
         responses={
             201: openapi.Response(
                 description="User successfully registered",
-                schema=UserSerializer
+                schema=UserSerializer,
+                examples={
+                    "application/json": {
+                        "message": "User registered successfully. Please check your email to verify your account.",
+                        "user": {
+                            "id": 1,
+                            "username": "johndoe",
+                            "email": "john.doe@example.com",
+                            "first_name": "",
+                            "last_name": ""
+                        }
+                    }
+                }
             ),
             400: openapi.Response(
                 description="Bad request - validation errors",
@@ -55,10 +71,9 @@ class RegisterView(APIView):
                         "password": ["Password must be at least 8 characters long."]
                     }
                 }
-            ),
-            401: "API key missing or invalid"
+            )
         },
-        tags=['Authentication']
+        tags=['User Management']
     )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -77,25 +92,36 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
         operation_summary="Login to get auth tokens",
         operation_description="""
         Authenticates a user and returns JWT access and refresh tokens.
-
-        This endpoint requires a valid API key for access. The API key should be
-        included in the request headers as 'X-API-Key'.
-
+        
+        ### Required Fields
+        - email: Your registered email address
+        - password: Your account password
+        
+        ### Response Details
         The response includes:
         - username: The username of the authenticated user
         - access: JWT access token (valid for 1 hour)
         - refresh: JWT refresh token (valid for 2 days)
         - access_expires: Access token expiration timestamp
         - refresh_expires: Refresh token expiration timestamp
-
+        
+        ### Using the Token
         Use the access token in subsequent requests by including it in the
-        Authorization header as: 'Bearer {access_token}'
+        Authorization header as: `Bearer {access_token}`
+        
+        ### Example Request
+        ```json
+        {
+            "email": "john.doe@example.com",
+            "password": "yourSecurePassword"
+        }
+        ```
         """,
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
@@ -117,7 +143,16 @@ class LoginView(APIView):
                         'access_expires': openapi.Schema(type=openapi.TYPE_INTEGER, description='Access token expiration timestamp'),
                         'refresh_expires': openapi.Schema(type=openapi.TYPE_INTEGER, description='Refresh token expiration timestamp'),
                     }
-                )
+                ),
+                examples={
+                    "application/json": {
+                        "username": "johndoe",
+                        "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                        "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                        "access_expires": 1719972457,
+                        "refresh_expires": 1720058857
+                    }
+                }
             ),
             400: openapi.Response(
                 description="Invalid credentials",
@@ -127,7 +162,14 @@ class LoginView(APIView):
                     }
                 }
             ),
-            401: "API key missing or invalid"
+            401: openapi.Response(
+                description="Email not verified",
+                examples={
+                    "application/json": {
+                        "error": "Email not verified. Please check your inbox for the verification link."
+                    }
+                }
+            )
         },
         tags=['Authentication']
     )
@@ -166,12 +208,30 @@ class ProfileView(APIView):
         operation_summary="Get authenticated user's profile",
         operation_description="""
         Retrieves the profile information of the currently authenticated user.
-
+        
+        ### Authentication Required
         This endpoint requires authentication with a valid JWT token.
-        The token should be included in the request headers as:
-        'Authorization: Bearer {access_token}'
-
-        The access token can be obtained from the login endpoint.
+        Include the token in your request headers as:
+        `Authorization: Bearer {access_token}`
+        
+        ### Response Data
+        Returns user profile information including:
+        - User ID
+        - Username
+        - Email address
+        - First name (if provided)
+        - Last name (if provided)
+        
+        ### Example Response
+        ```json
+        {
+            "id": 1,
+            "username": "johndoe",
+            "email": "john.doe@example.com",
+            "first_name": "John",
+            "last_name": "Doe"
+        }
+        ```
         """,
         responses={
             200: UserSerializer,
@@ -192,15 +252,27 @@ class ProfileView(APIView):
         return Response(serializer.data)
 
 class VerifyEmailView(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
         operation_summary="Verify user email",
         operation_description="""
         Verifies a user's email address using the token sent to their email.
-
-        This endpoint requires a valid API key for access. The API key should be
-        included in the request headers as 'X-API-Key'.
+        
+        ### Required Field
+        - token: The verification token received in the email
+        
+        ### Example Request
+        ```json
+        {
+            "token": "a1b2c3d4e5f6g7h8i9j0..."
+        }
+        ```
+        
+        ### Notes
+        - Tokens are valid for 24 hours from creation
+        - Each token can only be used once
+        - After verification, the user account will be activated
         """,
         request_body=VerifyEmailSerializer,
         responses={
@@ -220,10 +292,16 @@ class VerifyEmailView(APIView):
                     }
                 }
             ),
-            401: "API key missing or invalid",
-            404: "Token not found"
+            404: openapi.Response(
+                description="Token not found",
+                examples={
+                    "application/json": {
+                        "error": "Token not found."
+                    }
+                }
+            )
         },
-        tags=['Authentication']
+        tags=['Email Verification']
     )
     def post(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
@@ -262,18 +340,26 @@ class VerifyEmailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class RequestPasswordResetView(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
         operation_summary="Request password reset email",
         operation_description="""
-        Sends a password reset email to the user.
-
-        This endpoint requires a valid API key for access. The API key should be
-        included in the request headers as 'X-API-Key'.
-
+        Initiates the password reset process by sending a reset link to the user's email.
+        
+        ### Required Field
+        - email: The email address associated with the user account
+        
+        ### Security Note
         For security reasons, this endpoint always returns a success message,
         even if the email does not exist in the system.
+        
+        ### Example Request
+        ```json
+        {
+            "email": "john.doe@example.com"
+        }
+        ```
         """,
         request_body=RequestPasswordResetSerializer,
         responses={
@@ -285,9 +371,16 @@ class RequestPasswordResetView(APIView):
                     }
                 }
             ),
-            401: "API key missing or invalid"
+            400: openapi.Response(
+                description="Invalid email format",
+                examples={
+                    "application/json": {
+                        "email": ["Enter a valid email address."]
+                    }
+                }
+            )
         },
-        tags=['Authentication']
+        tags=['Password Reset']
     )
     def post(self, request):
         serializer = RequestPasswordResetSerializer(data=request.data)
@@ -311,17 +404,35 @@ class RequestPasswordResetView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ResetPasswordView(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
         operation_summary="Reset user password",
         operation_description="""
         Resets the user's password using a valid reset token.
-
-        This endpoint requires a valid API key for access. The API key should be
-        included in the request headers as 'X-API-Key'.
-
-        Password requirements follow Django's default password validators.
+        
+        ### Required Fields
+        - token: The password reset token received in the email
+        - password: The new password
+        - confirm_password: Confirmation of the new password (must match password)
+        
+        ### Password Requirements
+        - Must be at least 8 characters long
+        - Should not be too common or easily guessable
+        - Should not be similar to your other personal information
+        
+        ### Example Request
+        ```json
+        {
+            "token": "a1b2c3d4e5f6g7h8i9j0...",
+            "password": "newSecurePassword123",
+            "confirm_password": "newSecurePassword123"
+        }
+        ```
+        
+        ### Notes
+        - Password reset tokens are valid for 1 hour from creation
+        - Each token can only be used once
         """,
         request_body=ResetPasswordSerializer,
         responses={
@@ -343,10 +454,16 @@ class ResetPasswordView(APIView):
                     }
                 }
             ),
-            401: "API key missing or invalid",
-            404: "Token not found"
+            404: openapi.Response(
+                description="Token not found",
+                examples={
+                    "application/json": {
+                        "error": "Token not found."
+                    }
+                }
+            )
         },
-        tags=['Authentication']
+        tags=['Password Reset']
     )
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
@@ -396,23 +513,34 @@ class VerifyEmailLinkView(APIView):
         operation_summary="Verify user email via link",
         operation_description="""
         Verifies a user's email address when they click the link sent to their email.
-        This endpoint expects a GET request with the token in the URL path.
+        This endpoint handles GET requests from email links and serves an HTML response.
+        
+        ### How It Works
+        1. User receives an email with a verification link
+        2. User clicks the link which sends a GET request to this endpoint
+        3. The system verifies the token and activates the user's account
+        4. User sees a success message and can now log in
+        
+        ### Notes
+        - Tokens are valid for 24 hours from creation
+        - Each token can only be used once
+        - This endpoint returns HTML content, not JSON
         """,
         manual_parameters=[
             openapi.Parameter(
                 'token',
                 openapi.IN_PATH,
-                description="Email verification token",
+                description="Email verification token from the email link",
                 type=openapi.TYPE_STRING,
                 required=True
             ),
         ],
         responses={
-            200: "Email successfully verified",
-            400: "Invalid or expired token",
-            404: "Token not found"
+            200: openapi.Response(description="Email successfully verified (returns HTML)"),
+            400: openapi.Response(description="Invalid or expired token (returns HTML)"),
+            404: openapi.Response(description="Token not found (returns HTML)")
         },
-        tags=['Authentication']
+        tags=['Email Verification']
     )
     def get(self, request, token):
         try:

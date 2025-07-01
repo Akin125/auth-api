@@ -18,13 +18,36 @@ from drf_yasg import openapi
 # Create a schema view for the API documentation
 schema_view = get_schema_view(
    openapi.Info(
-      title="Seyifunmi's Auth API",  # Title of the API
-      default_version='v1',  # API version
-      description="API documentation for the authentication system",  # Description of the API
-      contact=openapi.Contact(email="philipoluseyi@gmail.com"),  # Contact information
+      title="Authentication API",
+      default_version='v1',
+      description="""
+## Authentication API Documentation
+
+This API provides authentication and user management services.
+
+### Features
+- User registration with email verification
+- JWT token-based authentication
+- Password reset functionality
+- User profile management
+
+### Authentication
+- All endpoints use JWT token authentication 
+- Include the token in your request header as: `Authorization: Bearer {token}`
+- You can obtain a token through the login endpoint
+
+### Error Handling
+- All endpoints return standard HTTP status codes
+- Error responses include descriptive messages to help troubleshoot issues
+
+For support, please contact: philipoluseyi@gmail.com
+      """,
+      terms_of_service="https://www.example.com/terms/",
+      contact=openapi.Contact(email="philipoluseyi@gmail.com"),
+      license=openapi.License(name="MIT License"),
    ),
-   public=True,  # Set to True to allow public access to the docs
-   permission_classes=(permissions.AllowAny,),  # Allow any user to view the docs
+   public=True,
+   permission_classes=(permissions.AllowAny,),
 )
 
 # URL patterns for documentation endpoints

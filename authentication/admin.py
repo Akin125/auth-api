@@ -1,8 +1,12 @@
 from django.contrib import admin
-from .models import APIKey
+from .models import EmailVerificationToken, PasswordResetToken
 
-@admin.register(APIKey)
-class APIKeyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'service', 'created', 'is_active')
-    search_fields = ('name', 'service', 'description')
-    readonly_fields = ('key',)
+@admin.register(EmailVerificationToken)
+class EmailVerificationTokenAdmin(admin.ModelAdmin):
+    list_display = ('user', 'created_at', 'expires_at', 'verified')
+    search_fields = ('user__username', 'user__email')
+
+@admin.register(PasswordResetToken)
+class PasswordResetTokenAdmin(admin.ModelAdmin):
+    list_display = ('user', 'created_at', 'expires_at', 'used')
+    search_fields = ('user__username', 'user__email')

@@ -34,21 +34,41 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# CORS Settings
-CORS_ALLOWED_ORIGINS = [
-     'http://localhost:3000',
-     'http://127.0.0.1',
-     'http://localhost:5173',  # Vite default port
-     'http://127.0.0.1:5173',  # Vite default port
-     'https://auth-api-lg46.onrender.com',
-]
-
+# Enhanced CORS Settings - Always enable CORS for development and specific origins for production
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development mode
 CORS_ALLOW_CREDENTIALS = True
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    'auth-api-lg46.onrender.com',
+# Only use these specific origins in production mode
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:3000',
+        'http://127.0.0.1',
+        'http://localhost:5173',  # Vite default port
+        'http://127.0.0.1:5173',  # Vite default port
+        'https://auth-api-lg46.onrender.com',
+        # Add your frontend domain here
+    ]
+
+# Additional CORS settings
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 
 
@@ -177,13 +197,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'authentication.authentication.APIKeyAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+# CORS: Allow all origins in development
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGINS = []
 
 # Site URL for generating links in emails
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
